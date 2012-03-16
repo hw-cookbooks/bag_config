@@ -82,7 +82,7 @@ Custom Data Bag Entry
 By default, the configuration entries are based on the current node name, prefixed
 with `config_`. If a custom entry name is required:
 
-* `node[cookbook][:config_bag] = 'myconfigentry'
+* `node[cookbook][:config_bag] = 'myconfigentry'`
 
 This will force the data bag entry searched for to have the id `myconfigentry`.
 
