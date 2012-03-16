@@ -56,10 +56,11 @@ then the `test` data bag will be searched for an entry with the id of `config_te
 
 Quick Ref:
 
-  cookbook: test
-  node name: test1.box
-  data bag entry: test/config_test1_box
-
+```
+cookbook: test
+node name: test1.box
+data bag entry: test/config_test1_box
+```
 
 Advanced Usage
 ==============
