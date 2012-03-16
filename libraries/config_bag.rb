@@ -49,7 +49,11 @@ module ConfigBag
           data_bag, data_bag_name, data_bag_secret
         )
       else
-        @_cached_bag = search(data_bag, "id:#{data_bag_name}").first
+        begin
+          @_cached_bag = search(data_bag, "id:#{data_bag_name}").first
+        rescue Net::HTTPServerException
+          Chef::Log.info("Search for #{data_bag} data bag failed meaning no configuration entries available.")
+        end
       end
     end
     @_cached_bag
