@@ -1,4 +1,4 @@
-ConfigBag
+BagConfig
 =========
 
 This cookbook provides helper methods to Recipe instances allowing them to easily
