@@ -1,3 +1,27 @@
+class NodeOverride
+  attr_accessor :node
+  attr_accessor :recipe
+
+  def initialize(node, recipe)
+    @node = node
+    @recipe = recipe
+  end
+
+  def [](key)
+    val = @recipe.bag_or_node(key)
+    val
+  end
+
+  def method_missing(symbol, *args)
+    if(@node.respond_to?(symbol))
+      @node.send(symbol, *args)
+    else
+      self[args.first]
+    end
+  end
+
+end
+
 module ConfigBag
 
   # key_override:: Key used against node to access attributes
@@ -20,9 +44,15 @@ module ConfigBag
     @_data_bag_override = name_override
   end
 
+  def attribute_databag_override
+    if(has_node_attributes?)
+      _node[node_key][:config_data_bag_override]
+    end
+  end
+
   # Returns the name of the data bag containing configuration entries
   def data_bag
-    @_data_bag_override || node[node_key][:config_data_bag_override] || node_key
+    @_data_bag_override || attribute_databag_override || node_key
   end
 
   # args:: attribute names
@@ -38,7 +68,12 @@ module ConfigBag
   def bag_or_node(key, bag=nil)
     bag ||= retrieve_data_bag
     val = bag[key.to_s] if bag
-    val || node[node_key][key]
+    puts "KEY :#{node_key}"
+    puts _node
+    puts '*' * 10
+    puts run_context.node
+    puts '* ' * 100
+    val || _node[node_key][key]
   end
 
   # Returns configuration data bag
@@ -51,6 +86,7 @@ module ConfigBag
       else
         begin
           @_cached_bag = search(data_bag, "id:#{data_bag_name}").first
+          @_cached_bag = Mash.new(@_cached_bag.raw_data) if @_cached_bag
         rescue Net::HTTPServerException
           Chef::Log.info("Search for #{data_bag} data bag failed meaning no configuration entries available.")
         end
@@ -62,11 +98,13 @@ module ConfigBag
   # Returns data bag entry name based on node attributes or
   # defaults to using node name prefixed with 'config_'
   def data_bag_name
-    if(node[node_key][:config_bag])
-      if(node[node_key][:config_bag].respond_to?(:has_key?))
-        name = node[node_key][:config_bag][:name].to_s
-      else
-        name = node[node_key][:config_bag].to_s
+    if(has_node_attributes?)
+      if(_node[node_key][:config_bag])
+        if(_node[node_key][:config_bag].respond_to?(:has_key?))
+          name = _node[node_key][:config_bag][:name].to_s
+        else
+          name = _node[node_key][:config_bag].to_s
+        end
       end
     end
     name.to_s.empty? ? "config_#{node.name.gsub('.', '_')}" : name
@@ -74,17 +112,19 @@ module ConfigBag
 
   # Checks node attributes to determine if data bag is encrypted
   def data_bag_encrypted?
-    if(node[node_key][:config_bag].respond_to?(:has_key?))
-      !!node[node_key][:config_bag][:encrypted]
-    else
-      false
+    if(has_node_attributes?)
+      if(_node[node_key][:config_bag].respond_to?(:has_key?))
+        !!_node[node_key][:config_bag][:encrypted]
+      else
+        false
+      end
     end
   end
 
   # Returns data bag secret if data bag is encrypted
   def data_bag_secret
     if(data_bag_encrypted?)
-      secret = node[node_key][:config_bag][:secret]
+      secret = _node[node_key][:config_bag][:secret]
       if(File.exists?(secret))
         Chef::EncryptedDataBagItem.load_secret(secret)
       else
@@ -92,6 +132,33 @@ module ConfigBag
       end
     end
   end
+
+  def has_node_attributes?
+    !_node[node_key].nil?
+  end
+
+  def _node
+    run_context.node
+  end
+
+
+  def self.included(base)
+    base.class_eval do
+      def _node
+        @run_context.node
+      end
+      
+      def node
+        puts "RUNNING THIS GUY"
+        #        return _node
+        unless(@_node_override)
+          @_node_override = NodeOverride.new(run_context.node, self)
+        end
+        @_node_override
+      end
+    end
+  end
+
 end
 
 Chef::Recipe.send(:include, ConfigBag)
