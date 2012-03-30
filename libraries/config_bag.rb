@@ -1,17 +1,42 @@
+# This is a proxy object used within recipes
+# to allow bag based attribute overrides
 class NodeOverride
+  # Access to actual node instance
   attr_accessor :node
+  # Recipe this proxy instance is associated to
   attr_accessor :recipe
 
+  # node:: Chef::Node
+  # recipe:: Chef::Recipe
+  # Create a new NodeOverride proxy
   def initialize(node, recipe)
     @node = node
     @recipe = recipe
   end
 
+  # key:: Attribute key
+  # Returns attribute with bag overrides if applicable
   def [](key)
-    val = @recipe.bag_or_node(key)
-    val
+    if(key.to_s == @recipe.node_key.to_s)
+      val = @recipe.retrieve_data_bag
+      if(val)
+        val.delete('id')
+        atr = Chef::Node::Attribute.new(
+          node.normal_attrs,
+          node.default_attrs,
+          Chef::Mixin::DeepMerge.merge(
+            node.override_attrs,
+            Mash.new(@recipe.node_key => val)
+          ),
+          node.automatic_attrs
+        )
+        res = atr[key]
+      end
+    end
+    res || node[key]
   end
 
+  # Provides proper proxy to Chef::Node instance
   def method_missing(symbol, *args)
     if(@node.respond_to?(symbol))
       @node.send(symbol, *args)
@@ -22,7 +47,7 @@ class NodeOverride
 
 end
 
-module ConfigBag
+module BagConfig
 
   # key_override:: Key used against node to access attributes
   # Overrides key used to access node attributes. By default
@@ -33,7 +58,7 @@ module ConfigBag
 
   # Returns key to be used when accessing attributes via #node
   def node_key
-    @_cookbook_name_override || cookbook_name
+    @node_key || @_cookbook_name_override || @cookbook_name || cookbook_name
   end
 
   # name_override:: Data bag name
@@ -44,9 +69,10 @@ module ConfigBag
     @_data_bag_override = name_override
   end
 
+  # Return data bag override if available
   def attribute_databag_override
     if(has_node_attributes?)
-      _node[node_key][:config_data_bag_override]
+      original_node[node_key][:config_data_bag_override]
     end
   end
 
@@ -68,28 +94,22 @@ module ConfigBag
   def bag_or_node(key, bag=nil)
     bag ||= retrieve_data_bag
     val = bag[key.to_s] if bag
-    puts "KEY :#{node_key}"
-    puts _node
-    puts '*' * 10
-    puts run_context.node
-    puts '* ' * 100
-    val || _node[node_key][key]
+    val || @node[key]
   end
 
   # Returns configuration data bag
   def retrieve_data_bag
     unless(@_cached_bag)
-      if(data_bag_encrypted?)
-        @_cached_bag = Chef::EncryptedDataBagItem.load(
-          data_bag, data_bag_name, data_bag_secret
-        )
-      else
-        begin
-          @_cached_bag = search(data_bag, "id:#{data_bag_name}").first
-          @_cached_bag = Mash.new(@_cached_bag.raw_data) if @_cached_bag
-        rescue Net::HTTPServerException
-          Chef::Log.info("Search for #{data_bag} data bag failed meaning no configuration entries available.")
+      begin
+        if(data_bag_encrypted?)
+          @_cached_bag = Chef::EncryptedDataBagItem.load(
+            data_bag, data_bag_name, data_bag_secret
+          )
+        else
+          @_cached_bag = Chef::DataBagItem.load(data_bag, data_bag_name)
         end
+      rescue => e
+        Chef::Log.debug("No configuration bag found: #{e}")
       end
     end
     @_cached_bag
@@ -99,11 +119,11 @@ module ConfigBag
   # defaults to using node name prefixed with 'config_'
   def data_bag_name
     if(has_node_attributes?)
-      if(_node[node_key][:config_bag])
-        if(_node[node_key][:config_bag].respond_to?(:has_key?))
-          name = _node[node_key][:config_bag][:name].to_s
+      if(original_node[node_key][:config_bag])
+        if(original_node[node_key][:config_bag].respond_to?(:has_key?))
+          name = original_node[node_key][:config_bag][:name].to_s
         else
-          name = _node[node_key][:config_bag].to_s
+          name = original_node[node_key][:config_bag].to_s
         end
       end
     end
@@ -113,8 +133,8 @@ module ConfigBag
   # Checks node attributes to determine if data bag is encrypted
   def data_bag_encrypted?
     if(has_node_attributes?)
-      if(_node[node_key][:config_bag].respond_to?(:has_key?))
-        !!_node[node_key][:config_bag][:encrypted]
+      if(original_node[node_key][:config_bag].respond_to?(:has_key?))
+        !!original_node[node_key][:config_bag][:encrypted]
       else
         false
       end
@@ -124,7 +144,7 @@ module ConfigBag
   # Returns data bag secret if data bag is encrypted
   def data_bag_secret
     if(data_bag_encrypted?)
-      secret = _node[node_key][:config_bag][:secret]
+      secret = original_node[node_key][:config_bag][:secret]
       if(File.exists?(secret))
         Chef::EncryptedDataBagItem.load_secret(secret)
       else
@@ -133,32 +153,40 @@ module ConfigBag
     end
   end
 
+  # Returns if the node has attributes for the given #node_key
   def has_node_attributes?
-    !_node[node_key].nil?
+    !original_node[node_key].nil?
   end
 
-  def _node
-    run_context.node
+  # Override for #node method
+  def override_node
+    if(@_node_override.nil? || @_node_override.node != original_node)
+      @_node_override = NodeOverride.new(original_node, self)
+    end
+    @_node_override
   end
 
-
-  def self.included(base)
+  # Aliases around the #node based methods
+  def self.included(base) # :nordoc:
     base.class_eval do
-      def _node
-        @run_context.node
-      end
-      
-      def node
-        puts "RUNNING THIS GUY"
-        #        return _node
-        unless(@_node_override)
-          @_node_override = NodeOverride.new(run_context.node, self)
-        end
-        @_node_override
-      end
+      alias_method :original_node, :node
+      alias_method :node, :override_node
     end
   end
 
 end
 
-Chef::Recipe.send(:include, ConfigBag)
+# Hook everything in
+Chef::Recipe.send(:include, BagConfig)
+::Erubis::Context.send(:include, BagConfig)
+
+# Template wrap only needs to be applied to recipe instances
+Chef::Recipe.class_eval do
+  # Wrap template resource so we can add the proper node key
+  def template(*args, &block)
+    resource = method_missing(*args.unshift(:template), &block)
+    ## This is the important part
+    resource.variables[:node_key] = self.node_key
+    resource
+  end
+end
