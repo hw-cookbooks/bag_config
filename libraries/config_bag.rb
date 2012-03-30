@@ -58,7 +58,11 @@ module BagConfig
 
   # Returns key to be used when accessing attributes via #node
   def node_key
-    @node_key || @_cookbook_name_override || @cookbook_name || cookbook_name
+    @node_key || 
+    @_cookbook_name_override || 
+    @cookbook_name || 
+    original_node[:bag_config][:map][cookbook_name] ||
+    cookbook_name
   end
 
   # name_override:: Data bag name
