@@ -1,46 +1,22 @@
 BagConfig
 =========
 
-This cookbook provides helper methods to Recipe instances allowing them to easily
-provide configurations from data bag entries, and elegantly fall back to node
-attributes if the data bag entry does not exist or the attribute requested does
-not exist within the data bag entry.
+Making data bag entries the "last mile" of attribute overrides.
 
-By default, no attribute modification will be required when providing configuration
-to a recipe via data bag entries. The Basic Usage section will cover this simple
-usage. The Advanced Usage section will cover available configuration attributes
-to handle non-standard naming and extra data bag functionality.
+What's it do?
+-------------
+
+This cookbook allows attributes to be provided via data bag entries. It slips
+functionality into recipes seamlessly to provide consistent functionality across
+all recipes, not just those explicitly built for it.
 
 Basic Usage
 ===========
 
-Recipes
--------
+Access attributes the same way as always:
 
-Recipes must make use of the #bag_or_node method(s) for data bag configuration to
-be applied. For example, below is a generic recipe:
+* `node[:my_cookbook][:my_attribute]`
 
-```ruby
-# recipes/default.rb
-
-template node[:test][:my_file] do
-  ...
-end
-```
-
-To provide support for data bag configuration, the recipe can be modifed like so:
-
-```ruby
-# recipes/default.rb
-
-template bag_or_node(:my_file) do
-  ...
-end
-```
-
-This allows the value to come from the configuration data bag if it exists and
-the value has been set there, other wise it will fall back to the value defined
-by `node[:test][:my_file]`.
 
 Naming scheme
 =============
@@ -61,6 +37,15 @@ cookbook: test
 node name: test1.box
 data bag entry: test/config_test1_box
 ```
+
+Attribute key
+-------------
+
+Attribute keys may not always be consistent with cookbook names. For example,
+the `chef-client` cookbook uses the attribute key `:chef_client`. This can
+be switched via attributes:
+
+* `node[:bag_config][:map]['chef-client'] = 'chef_client'`
 
 Advanced Usage
 ==============
@@ -114,6 +99,8 @@ data bag based configuration.
 
 Accessing configuration attributes
 ----------------------------------
+
+__This access type is deprecated__
 
 To access a single attribute:
 
