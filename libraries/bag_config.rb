@@ -14,11 +14,99 @@ class NodeOverride
     @recipe = recipe
   end
 
+  # key:: Base key for access
+  # Returns mapped key if mapping provided
+  def base_key(key)
+    node[:bag_config][:mapping][key] || key
+  end
+
+  # key:: base key accessing attributes
+  # Returns data bag name if custom data bag is in use
+  def data_bag_name(key)
+    name = base_key(key)
+    [key, base_key(key)].each do |k|
+      if(node[:bag_config][:info][k] && node[:bag_config][:info][k][:bag])
+        name = node[:bag_config][:info][k][:bag]
+      end
+    end
+    name
+  end
+
+  # key:: base key accessing attributes
+  # Returns data bag item name if custom data bag item name is in use
+  def data_bag_item_name(key)
+    name = "config_#{node.name.gsub('.', '_')}"
+    [key, base_key(key)].each do |k|
+      if(node[:bag_config][:info][k] && node[:bag_config][:info][k][:item])
+        name = node[:bag_config][:info][k][:item]
+      end
+    end
+    name
+  end
+
+  # key:: base key accessing attributes
+  # Returns if the data bag item is encrypted
+  def encrypted_data_bag_item?(key)
+    encrypted = false
+    [key, base_key(key)].each do |k|
+      if(node[:bag_config][:info][k])
+        encrypted = !!node[:bag_config][:info][k][:encrypted]
+      end
+    end
+    encrypted
+  end
+
+  # key:: base key accessing attributes
+  # Returns data bag item secret if applicable
+  def data_bag_item_secret(key)
+    secret = nil
+    [key, base_key(key)].each do |k|
+      if(node[:bag_config][:info][k] && node[:bag_config][:info][k][:secret])
+        secret = node[:bag_config][:info][k][:secret]
+        if(File.exists?(secret))
+          secret = Chef::EncryptedDataBagItem.load_secret(secret)
+        end
+      end
+    end
+    secret
+  end
+
+  # key:: base key accessing attributes
+  # Returns proper key to use for index based
+  def data_bag_item(key)
+    key = key.to_sym
+    @@cached_items ||= {}
+    begin
+      if(@@cached_items[key].nil?)
+        if(encrypted_data_bag_item?(key))
+          @@cached_items[key] = Chef::EncryptedDataBagItem.load(
+            data_bag_name(key),
+            data_bag_item_name(key),
+            data_bag_item_secret(key)
+          )
+        else
+          @@cached_items[key] = Chef::DataBagItem.load(
+            data_bag_name(key),
+            data_bag_item_name(key)
+          )
+        end
+      end
+    rescue => e
+      Chef::Log.debug("Failed to retrieve configuration data bag item (#{key}): #{e}")
+      @@cached_items[key] = false
+    end
+    @@cached_items[key]
+  end
+
   # key:: Attribute key
   # Returns attribute with bag overrides if applicable
   def [](key)
-    if(key.to_s == @recipe._node_key.to_s)
-      val = @recipe._retrieve_data_bag
+    key = key.to_sym
+    @@lookup_cache = {}
+    if(@@lookup_cache[key])
+      @@lookup_cache[key]
+    else
+      val = data_bag_item(key)
       if(val)
         val.delete('id')
         atr = Chef::Node::Attribute.new(
@@ -26,14 +114,14 @@ class NodeOverride
           node.default_attrs,
           Chef::Mixin::DeepMerge.merge(
             node.override_attrs,
-            Mash.new(@recipe._node_key => val)
+            Mash.new(key => val.to_hash)
           ),
           node.automatic_attrs
         )
         res = atr[key]
       end
+      @@lookup_cache[key] = res || node[key]
     end
-    res || node[key]
   end
 
   # Provides proper proxy to Chef::Node instance
@@ -48,119 +136,6 @@ class NodeOverride
 end
 
 module BagConfig
-
-  # key_override:: Key used against node to access attributes
-  # Overrides key used to access node attributes. By default
-  # the cookbook name is used
-  def _override_node_key(key_override)
-    @_cookbook_name_override = key_override
-  end
-
-  # Returns key to be used when accessing attributes via #node
-  def _node_key
-    @node_key || 
-    @_cookbook_name_override || 
-    original_node[:bag_config][:map][cookbook_name] ||
-    @cookbook_name || 
-    cookbook_name
-  end
-
-  # name_override:: Data bag name
-  # Overrides the data bag name configuration entries are stored.
-  # By default the name of the data bag is the same as #node_key
-  # which defaults to the name of the cookbook
-  def _override_data_bag(name_override)
-    @_data_bag_override = name_override
-  end
-
-  # Return data bag override if available
-  def _attribute_databag_override
-    if(_has_node_attributes?)
-      original_node[_node_key][:config_data_bag_override]
-    end
-  end
-
-  # Returns the name of the data bag containing configuration entries
-  def _data_bag
-    @_data_bag_override || _attribute_databag_override || _node_key
-  end
-
-  # args:: attribute names
-  # Returns hash of requested attributes
-  def _bag_or_node_args(*args)
-    Hash[*args.flatten.map{|k| [k.to_sym, _bag_or_node(k.to_sym)]}.flatten]
-  end
-
-  # key:: attribute key
-  # bag:: optional data bag
-  # Returns value from data bag for provided key and falls back to 
-  # node attributes if no value is found within data bag
-  def _bag_or_node(key, bag=nil)
-    bag ||= _retrieve_data_bag
-    val = bag[key.to_s] if bag
-    val || original_node[key]
-  end
-
-  # Returns configuration data bag
-  def _retrieve_data_bag
-    unless(@_cached_bag)
-      begin
-        if(_data_bag_encrypted?)
-          @_cached_bag = Chef::EncryptedDataBagItem.load(
-            _data_bag, _data_bag_name, _data_bag_secret
-          )
-        else
-          @_cached_bag = Chef::DataBagItem.load(_data_bag, _data_bag_name)
-        end
-      rescue => e
-        Chef::Log.debug("No configuration bag found: #{e}")
-      end
-    end
-    @_cached_bag
-  end
-
-  # Returns data bag entry name based on node attributes or
-  # defaults to using node name prefixed with 'config_'
-  def _data_bag_name
-    if(_has_node_attributes?)
-      if(original_node[_node_key][:config_bag])
-        if(original_node[_node_key][:config_bag].respond_to?(:has_key?))
-          name = original_node[_node_key][:config_bag][:name].to_s
-        else
-          name = original_node[_node_key][:config_bag].to_s
-        end
-      end
-    end
-    name.to_s.empty? ? "config_#{original_node.name.gsub('.', '_')}" : name
-  end
-
-  # Checks node attributes to determine if data bag is encrypted
-  def _data_bag_encrypted?
-    if(_has_node_attributes?)
-      if(original_node[_node_key][:config_bag].respond_to?(:has_key?))
-        !!original_node[_node_key][:config_bag][:encrypted]
-      else
-        false
-      end
-    end
-  end
-
-  # Returns data bag secret if data bag is encrypted
-  def _data_bag_secret
-    if(_data_bag_encrypted?)
-      secret = original_node[_node_key][:config_bag][:secret]
-      if(File.exists?(secret))
-        Chef::EncryptedDataBagItem.load_secret(secret)
-      else
-        secret
-      end
-    end
-  end
-
-  # Returns if the node has attributes for the given #node_key
-  def _has_node_attributes?
-    !original_node[_node_key].nil?
-  end
 
   # Override for #node method
   def override_node
@@ -183,14 +158,3 @@ end
 # Hook everything in
 Chef::Recipe.send(:include, BagConfig)
 ::Erubis::Context.send(:include, BagConfig)
-
-# Template wrap only needs to be applied to recipe instances
-Chef::Recipe.class_eval do
-  # Wrap template resource so we can add the proper node key
-  def template(*args, &block)
-    resource = method_missing(*args.unshift(:template), &block)
-    ## This is the important part
-    resource.variables[:node_key] = self._node_key
-    resource
-  end
-end
