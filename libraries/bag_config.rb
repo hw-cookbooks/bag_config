@@ -14,20 +14,12 @@ class NodeOverride
     @recipe = recipe
   end
 
-  # key:: Base key for access
-  # Returns mapped key if mapping provided
-  def base_key(key)
-    node[:bag_config][:mapping][key] || key
-  end
-
   # key:: base key accessing attributes
   # Returns data bag name if custom data bag is in use
   def data_bag_name(key)
-    name = base_key(key)
-    [key, base_key(key)].each do |k|
-      if(node[:bag_config][:info][k] && node[:bag_config][:info][k][:bag])
-        name = node[:bag_config][:info][k][:bag]
-      end
+    name = key
+    if(node[:bag_config][key] && node[:bag_config][key][:bag])
+      name = node[:bag_config][key][:bag]
     end
     name
   end
@@ -36,10 +28,8 @@ class NodeOverride
   # Returns data bag item name if custom data bag item name is in use
   def data_bag_item_name(key)
     name = "config_#{node.name.gsub('.', '_')}"
-    [key, base_key(key)].each do |k|
-      if(node[:bag_config][:info][k] && node[:bag_config][:info][k][:item])
-        name = node[:bag_config][:info][k][:item]
-      end
+    if(node[:bag_config][key] && node[:bag_config][key][:item])
+      name = node[:bag_config][key][:item]
     end
     name
   end
@@ -48,10 +38,8 @@ class NodeOverride
   # Returns if the data bag item is encrypted
   def encrypted_data_bag_item?(key)
     encrypted = false
-    [key, base_key(key)].each do |k|
-      if(node[:bag_config][:info][k])
-        encrypted = !!node[:bag_config][:info][k][:encrypted]
-      end
+    if(node[:bag_config][key])
+      encrypted = !!node[:bag_config][key][:encrypted]
     end
     encrypted
   end
@@ -60,12 +48,10 @@ class NodeOverride
   # Returns data bag item secret if applicable
   def data_bag_item_secret(key)
     secret = nil
-    [key, base_key(key)].each do |k|
-      if(node[:bag_config][:info][k] && node[:bag_config][:info][k][:secret])
-        secret = node[:bag_config][:info][k][:secret]
-        if(File.exists?(secret))
-          secret = Chef::EncryptedDataBagItem.load_secret(secret)
-        end
+    if(node[:bag_config][key] && node[:bag_config][key][:secret])
+      secret = node[:bag_config][key][:secret]
+      if(File.exists?(secret))
+        secret = Chef::EncryptedDataBagItem.load_secret(secret)
       end
     end
     secret
