@@ -24,28 +24,28 @@ Naming scheme
 Data bags
 ---------
 
-The name of the data bag used will correspond to the name of the cookbook the
-recipe resides within. For example, if the cookbook is named `test`, configuration
-entries will be searched for within the `test` data bag. Configuration entries
-for a node are based on the node name. If the name of the node is `test1.box`,
-then the `test` data bag will be searched for an entry with the id of `config_test1_box`.
+The name of the data bag used will correspond to the name of the base attribute
+key used within a cookbook. For example, the base attribute key for the munin
+cookbook is `munin` thus the data bag name used will be `munin`. However, the 
+chef-client cookbook uses the base attribute key of `chef_client` so the data
+bag name it uses will be `chef_client`.
+
+The naming of the data bag entries are based on the node name with a `config_`
+prefix. Given a node named `lucid`, the data bag entry id would be `config_lucid`.
+Periods are replaced with underscores within the node name for generating the
+data bag entry name. Thus, a node named `lucid.example.com` would have a data
+bag entry id of `config_lucid_example_com`.
+
 
 Quick Ref:
 
 ```
-cookbook: test
+cookbook: chef-client
+base key: chef_client
 node name: test1.box
-data bag entry: test/config_test1_box
+data bag name: chef_client
+data bag entry id: config_test1_box
 ```
-
-Attribute key
--------------
-
-Attribute keys may not always be consistent with cookbook names. For example,
-the `chef-client` cookbook uses the attribute key `:chef_client`. This can
-be switched via attributes:
-
-* `node[:bag_config][:map]['chef-client'] = 'chef_client'`
 
 Advanced Usage
 ==============
@@ -53,93 +53,38 @@ Advanced Usage
 Custom Data Bag
 ---------------
 
-If the configuration entries are not within a data bag that corresponds to the
-cookbook name (or #node_key if it has been overriden) it can be explicitly defined
-via attribute:
+Example: Use the `myconfig` data bag to supply configuration entries for the
+`nagios` attribute:
 
-* `node[cookbook][:config_data_bag_override] = 'my_custom_bag'`
-
-This will force config entries to be searched for within the `my_custom_bag` data bag.
+* `node[:bag_config][:nagios] = {:bag => :myconfig}`
 
 Custom Data Bag Entry
 ---------------------
 
-By default, the configuration entries are based on the current node name, prefixed
-with `config_`. If a custom entry name is required:
+Example: Use `custom_config` data bag entry id under the `nagios`
+base attribute key:
 
-* `node[cookbook][:config_bag] = 'myconfigentry'`
+* `node[:bag_config][:nagios] = {:item => 'custom_config'}`
 
-This will force the data bag entry searched for to have the id `myconfigentry`.
 
 Encrypted Data Bag Entry
 ------------------------
 
 Encrypted data bags are supported when the encrypted attribute is set:
 
-* `node[cookbook][:config_bag][:encrypted] = true`
+* `node[:bag_config][:nagios] = {:encrypted => true}
 
 This will require the secret being provided either inline:
 
-* `node[cookbook][:config_bag][:secret] = 'my_secret'`
+* `node[:bag_config][:nagios] = {:secret => 'my_secret'}`
 
 or as a path to the secret file on the node:
 
-* `node[cookbook][:config_bag][:secret] = '/etc/config_secret.file'`
+* `node[:bag_config][:nagios] = {:secret => '/etc/config_secret.file'}`
 
-Note: If a custom data bag entry name is required, it can be supplied via the
-:name key:
+Compatibility Note
+==================
 
-* `node[cookbook][:config_bag][:name] = 'myconfigentry'`
-
-Advanced Recipe Usage
-=====================
-
-This section is for helpers and configurations available to recipes providing
-data bag based configuration.
-
-Accessing configuration attributes
-----------------------------------
-
-__This access type is deprecated__
-
-To access a single attribute:
-
-```ruby
-file_name = bag_or_node(:file_name)
-```
-
-To access a number of attributes:
-
-```ruby
-config_hash = bag_or_node_args(:file_name, :file_mode, :etc...)
-...
-config_hash[:file_name]
-```
-
-The latter provides an easy way to fetch all configuration attributes at the
-start of the recipe and use the provided hash to access the values throughout
-the recipe. 
-
-Note: The resulting hash keys will be symbolized regardless of how they are
-initially provided to the method.
-
-Non-standard attributes key
----------------------------
-
-If the key used to access attributes on the node is not the same as the cookbook
-name of the recipe, it can be overriden in the recipe by calling #override_node_key.
-
-```ruby
-override_node_key('my-test')
-```
-Non-standard data bag
----------------------
-
-A custom data bag can be defined by recipe. Please note that if this approach is
-taken (rather than overriding via attributes) it must be done in all applicable
-recipes:
-
-```ruby
-override_data_bag('my_bag')
-```
-
+This version is incompatible with the 1.x versions. It removes all custom methods from Recipe
+instances and instead proxies the attribute requests via the node, so no modifications are
+required for full support.
