@@ -69,7 +69,7 @@ class NodeOverride
             data_bag_name(key),
             data_bag_item_name(key),
             data_bag_item_secret(key)
-          )
+          ).to_hash
         else
           @@cached_items[key] = Chef::DataBagItem.load(
             data_bag_name(key),
