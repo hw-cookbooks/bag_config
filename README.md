@@ -10,6 +10,11 @@ This cookbook allows attributes to be provided via data bag entries. It slips
 functionality into recipes seamlessly to provide consistent functionality across
 all recipes, not just those explicitly built for it.
 
+Repository
+----------
+
+https://github.com/heavywater/chef-bag_config
+
 Basic Usage
 ===========
 
