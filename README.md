@@ -87,6 +87,17 @@ or as a path to the secret file on the node:
 
 * `node[:bag_config][:nagios] = {:secret => '/etc/config_secret.file'}`
 
+Allowing/Restricting lookups
+============================
+
+By default, the every base attribute key used will invoke an attempt
+to load a configuration data bag item related to that key. To help
+reduce the number of lookups required on a run, whitelisting and blacklisting
+on keys is available:
+
+* `node[:bag_config][:bag_whitelist] = [:nagios, :djbdns]`
+* `node[:bag_config][:bag_blacklist] = [:nginx, :apache]`
+
 Compatibility Note
 ==================
 

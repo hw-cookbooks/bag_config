@@ -85,6 +85,20 @@ class NodeOverride
   end
 
   # key:: Attribute key
+  # Checks if data bag entry lookup is allowed based on white
+  # and blacklist values
+  def lookup_allowed?(key)
+    allowed = true
+    unless(node[:bag_whitelist].empty?)
+      allowed = node[:bag_whitelist].include?(key.to_s)
+    end
+    if(allowed && !node[:bag_blacklist].empty?)
+      allowed = !node[:bag_blacklist].include?(key.to_s)
+    end
+    allowed
+  end
+
+  # key:: Attribute key
   # Returns attribute with bag overrides if applicable
   def [](key)
     key = key.to_sym
@@ -92,7 +106,7 @@ class NodeOverride
     if(@@lookup_cache[key])
       @@lookup_cache[key]
     else
-      val = data_bag_item(key)
+      val = data_bag_item(key) if lookup_allowed?(key)
       if(val)
         val.delete('id')
         atr = Chef::Node::Attribute.new(
