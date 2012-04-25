@@ -5,15 +5,14 @@ default[:bag_config][:bag_blacklist] = []
 =begin
 
 node[:bag_config] = {
-  :cookbook => {
+  :base_key => {
     :bag => 'custom_bag_name',
     :item => 'custom_item_name',
     :encrypted => true,
     :secret => 'path/or/pass'
-  }
+  },
+  :bag_whitelist => [:nagios],
+  :bag_blacklist => [:nginx, :apache]
 }
-
-node[:bag_config][:allow_lookups] = []
-node[:bag_config][:exclude_lookups] = []
 
 =end
