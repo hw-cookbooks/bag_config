@@ -98,6 +98,10 @@ on keys is available:
 * `node[:bag_config][:bag_whitelist] = [:nagios, :djbdns]`
 * `node[:bag_config][:bag_blacklist] = [:nginx, :apache]`
 
+NOTE: The blacklist will _always_ have precedence. This means that if an item
+has been specified in the whitelist and is also found in the blacklist, it will
+be blacklisted.
+
 Compatibility Note
 ==================
 
