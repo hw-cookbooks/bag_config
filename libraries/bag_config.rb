@@ -89,12 +89,13 @@ class NodeOverride
   # and blacklist values
   def lookup_allowed?(key)
     allowed = true
-    unless(node[:bag_whitelist].empty?)
-      allowed = node[:bag_whitelist].include?(key.to_s)
+    unless(node[:bag_config][:bag_whitelist].empty?)
+      allowed = node[:bag_config][:bag_whitelist].map(&:to_s).include?(key.to_s)
     end
-    if(allowed && !node[:bag_blacklist].empty?)
-      allowed = !node[:bag_blacklist].include?(key.to_s)
+    if(allowed && !node[:bag_config][:bag_blacklist].empty?)
+      allowed = !node[:bag_config][:bag_blacklist].map(&:to_s).include?(key.to_s)
     end
+    Chef::Log.debug("BagConfig not allowed to fetch config for base key: #{key}") unless allowed
     allowed
   end
 
@@ -102,7 +103,7 @@ class NodeOverride
   # Returns attribute with bag overrides if applicable
   def [](key)
     key = key.to_sym
-    @@lookup_cache = {}
+    @@lookup_cache ||= {}
     if(@@lookup_cache[key])
       @@lookup_cache[key]
     else
