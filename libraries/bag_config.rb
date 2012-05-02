@@ -12,6 +12,7 @@ class NodeOverride
   def initialize(node, recipe)
     @node = node
     @recipe = recipe
+    @@lookup_cache ||= {}
   end
 
   # key:: base key accessing attributes
@@ -103,7 +104,6 @@ class NodeOverride
   # Returns attribute with bag overrides if applicable
   def [](key)
     key = key.to_sym if key.respond_to?(:to_sym)
-    @@lookup_cache ||= {}
     if(@@lookup_cache[key])
       @@lookup_cache[key]
     elsif(!key.to_s.empty?)
@@ -130,7 +130,14 @@ class NodeOverride
     if(@node.respond_to?(symbol))
       @node.send(symbol, *args)
     else
-      self[args.first]
+      if(symbol.to_s.end_with?('='))
+        if(@@lookup_cache.has_key?(k = symbol.to_s.sub('=', '').to_sym))
+          @lookup_cache.delete(k)
+        end
+        node.send(symbol, *args)
+      else
+        self[args.first]
+      end
     end
   end
 
