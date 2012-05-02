@@ -60,7 +60,7 @@ class NodeOverride
   # key:: base key accessing attributes
   # Returns proper key to use for index based
   def data_bag_item(key)
-    key = key.to_sym
+    key = key.to_sym if key.respond_to?(:to_sym)
     @@cached_items ||= {}
     begin
       if(@@cached_items[key].nil?)
@@ -102,11 +102,11 @@ class NodeOverride
   # key:: Attribute key
   # Returns attribute with bag overrides if applicable
   def [](key)
-    key = key.to_sym
+    key = key.to_sym if key.respond_to?(:to_sym)
     @@lookup_cache ||= {}
     if(@@lookup_cache[key])
       @@lookup_cache[key]
-    else
+    elsif(!key.to_s.empty?)
       val = data_bag_item(key) if lookup_allowed?(key)
       if(val)
         val.delete('id')
