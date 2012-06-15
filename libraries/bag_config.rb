@@ -12,7 +12,6 @@ class NodeOverride
   def initialize(node, recipe)
     @node = node
     @recipe = recipe
-    @@lookup_cache ||= {}
   end
 
   # key:: base key accessing attributes
@@ -104,9 +103,7 @@ class NodeOverride
   # Returns attribute with bag overrides if applicable
   def [](key)
     key = key.to_sym if key.respond_to?(:to_sym)
-    if(@@lookup_cache[key])
-      @@lookup_cache[key]
-    elsif(!key.to_s.empty?)
+    if(!key.to_s.empty?)
       val = data_bag_item(key) if lookup_allowed?(key)
       if(val)
         val.delete('id')
@@ -121,7 +118,7 @@ class NodeOverride
         )
         res = atr[key]
       end
-      @@lookup_cache[key] = res || node[key]
+      res || node[key]
     end
   end
 
@@ -131,9 +128,6 @@ class NodeOverride
       @node.send(symbol, *args)
     else
       if(symbol.to_s.end_with?('='))
-        if(@@lookup_cache.has_key?(k = symbol.to_s.sub('=', '').to_sym))
-          @lookup_cache.delete(k)
-        end
         node.send(symbol, *args)
       else
         self[args.first]
