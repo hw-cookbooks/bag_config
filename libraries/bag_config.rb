@@ -104,9 +104,7 @@ class NodeOverride
   # Returns attribute with bag overrides if applicable
   def [](key)
     key = key.to_sym if key.respond_to?(:to_sym)
-    if(@@lookup_cache[key])
-      @@lookup_cache[key]
-    elsif(!key.to_s.empty?)
+    if(!key.to_s.empty?)
       val = data_bag_item(key) if lookup_allowed?(key)
       if(val)
         val.delete('id')
@@ -121,7 +119,7 @@ class NodeOverride
         )
         res = atr[key]
       end
-      @@lookup_cache[key] = res || node[key]
+      res || node[key]
     end
   end
 
