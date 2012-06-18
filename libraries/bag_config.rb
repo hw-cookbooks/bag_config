@@ -1,18 +1,18 @@
 # This is a proxy object used within recipes
 # to allow bag based attribute overrides
 class NodeOverride
-  # Access to actual node instance
-  attr_accessor :node
   # Recipe this proxy instance is associated to
-  attr_accessor :recipe
+  attr_accessor :context
 
-  # node:: Chef::Node
-  # recipe:: Chef::Recipe
+  # context:: Chef::Recipe, Chef::Resource, Chef::Provider or Erubis::Context
   # Create a new NodeOverride proxy
-  def initialize(node, recipe)
-    @node = node
-    @recipe = recipe
+  def initialize(context)
+    @context = context
     @@lookup_cache ||= {}
+  end
+
+  def node
+    context && context.original_node
   end
 
   # key:: base key accessing attributes
@@ -127,8 +127,8 @@ class NodeOverride
 
   # Provides proper proxy to Chef::Node instance
   def method_missing(symbol, *args)
-    if(@node.respond_to?(symbol))
-      @node.send(symbol, *args)
+    if(node.respond_to?(symbol))
+      node.send(symbol, *args)
     else
       if(symbol.to_s.end_with?('='))
         if(@@lookup_cache.has_key?(k = symbol.to_s.sub('=', '').to_sym))
@@ -148,7 +148,7 @@ module BagConfig
   # Override for #node method
   def override_node
     if(@_node_override.nil? || @_node_override.node != original_node)
-      @_node_override = NodeOverride.new(original_node, self)
+      @_node_override = NodeOverride.new(self)
     end
     @_node_override
   end
