@@ -165,4 +165,6 @@ end
 
 # Hook everything in
 Chef::Recipe.send(:include, BagConfig)
+Chef::Resource.send(:include, BagConfig)
+Chef::Provider.send(:include, BagConfig)
 ::Erubis::Context.send(:include, BagConfig)
