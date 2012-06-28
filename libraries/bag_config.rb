@@ -7,6 +7,9 @@ class NodeOverride
   # context:: Chef::Recipe, Chef::Resource, Chef::Provider or Erubis::Context
   # Create a new NodeOverride proxy
   def initialize(context)
+    unless(context.respond_to?(:original_node))
+      raise TypeError.new("NodeOverride requires access to Chef::Node via provide context")
+    end
     @context = context
   end
 
@@ -74,7 +77,7 @@ class NodeOverride
           @cached_items[key] = Chef::DataBagItem.load(
             data_bag_name(key),
             data_bag_item_name(key)
-          )
+          ).to_hash
         end
       end
     rescue => e
@@ -123,15 +126,11 @@ class NodeOverride
   end
 
   # Provides proper proxy to Chef::Node instance
-  def method_missing(symbol, *args)
-    if(node.respond_to?(symbol))
-      node.send(symbol, *args)
+  def method_missing(method, *args)
+    if(node.respond_to?(method))
+      node.send(method, *args)
     else
-      if args.empty?
-          self[symbol]
-      else
-        node.send(symbol, *args)
-      end
+      args.empty? ? self[method] : node.send(method, *args)
     end
   end
 end
