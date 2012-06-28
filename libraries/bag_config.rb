@@ -61,17 +61,17 @@ class NodeOverride
   # Returns proper key to use for index based
   def data_bag_item(key)
     key = key.to_sym if key.respond_to?(:to_sym)
-    @@cached_items ||= {}
+    @cached_items ||= {}
     begin
-      if(@@cached_items[key].nil?)
+      if(@cached_items[key].nil?)
         if(encrypted_data_bag_item?(key))
-          @@cached_items[key] = Chef::EncryptedDataBagItem.load(
+          @cached_items[key] = Chef::EncryptedDataBagItem.load(
             data_bag_name(key),
             data_bag_item_name(key),
             data_bag_item_secret(key)
           ).to_hash
         else
-          @@cached_items[key] = Chef::DataBagItem.load(
+          @cached_items[key] = Chef::DataBagItem.load(
             data_bag_name(key),
             data_bag_item_name(key)
           )
@@ -79,9 +79,9 @@ class NodeOverride
       end
     rescue => e
       Chef::Log.debug("Failed to retrieve configuration data bag item (#{key}): #{e}")
-      @@cached_items[key] = false
+      @cached_items[key] = false
     end
-    @@cached_items[key]
+    @cached_items[key]
   end
 
   # key:: Attribute key
@@ -157,7 +157,9 @@ module BagConfig
 end
 
 # Hook everything in
-Chef::Recipe.send(:include, BagConfig)
-Chef::Resource.send(:include, BagConfig)
-Chef::Provider.send(:include, BagConfig)
-::Erubis::Context.send(:include, BagConfig)
+unless(Chef::Recipe.ancestors.include?(BagConfig))
+  Chef::Recipe.send(:include, BagConfig)
+  Chef::Resource.send(:include, BagConfig)
+  Chef::Provider.send(:include, BagConfig)
+  ::Erubis::Context.send(:include, BagConfig)
+end
