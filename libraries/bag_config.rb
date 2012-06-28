@@ -1,18 +1,17 @@
 # This is a proxy object used within recipes
 # to allow bag based attribute overrides
 class NodeOverride
-  # Access to actual node instance
-  attr_accessor :node
   # Recipe this proxy instance is associated to
-  attr_accessor :recipe
+  attr_accessor :context
 
-  # node:: Chef::Node
-  # recipe:: Chef::Recipe
+  # context:: Chef::Recipe, Chef::Resource, Chef::Provider or Erubis::Context
   # Create a new NodeOverride proxy
-  def initialize(node, recipe)
-    @node = node
-    @recipe = recipe
-    @@lookup_cache ||= {}
+  def initialize(context)
+    @context = context
+  end
+
+  def node
+    context && context.original_node
   end
 
   # key:: base key accessing attributes
@@ -104,9 +103,7 @@ class NodeOverride
   # Returns attribute with bag overrides if applicable
   def [](key)
     key = key.to_sym if key.respond_to?(:to_sym)
-    if(@@lookup_cache[key])
-      @@lookup_cache[key]
-    elsif(!key.to_s.empty?)
+    if(!key.to_s.empty?)
       val = data_bag_item(key) if lookup_allowed?(key)
       if(val)
         val.delete('id')
@@ -121,26 +118,22 @@ class NodeOverride
         )
         res = atr[key]
       end
-      @@lookup_cache[key] = res || node[key]
+      res || node[key]
     end
   end
 
   # Provides proper proxy to Chef::Node instance
   def method_missing(symbol, *args)
-    if(@node.respond_to?(symbol))
-      @node.send(symbol, *args)
+    if(node.respond_to?(symbol))
+      node.send(symbol, *args)
     else
-      if(symbol.to_s.end_with?('='))
-        if(@@lookup_cache.has_key?(k = symbol.to_s.sub('=', '').to_sym))
-          @lookup_cache.delete(k)
-        end
-        node.send(symbol, *args)
+      if args.empty?
+          self[symbol]
       else
-        self[args.first]
+        node.send(symbol, *args)
       end
     end
   end
-
 end
 
 module BagConfig
@@ -148,7 +141,7 @@ module BagConfig
   # Override for #node method
   def override_node
     if(@_node_override.nil? || @_node_override.node != original_node)
-      @_node_override = NodeOverride.new(original_node, self)
+      @_node_override = NodeOverride.new(self)
     end
     @_node_override
   end
@@ -165,4 +158,6 @@ end
 
 # Hook everything in
 Chef::Recipe.send(:include, BagConfig)
+Chef::Resource.send(:include, BagConfig)
+Chef::Provider.send(:include, BagConfig)
 ::Erubis::Context.send(:include, BagConfig)
