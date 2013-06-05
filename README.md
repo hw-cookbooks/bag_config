@@ -13,7 +13,7 @@ all recipes, not just those explicitly built for it.
 Repository
 ----------
 
-https://github.com/heavywater/chef-bag_config
+https://github.com/hw-cookbooks/bag_config
 
 Basic Usage
 ===========
