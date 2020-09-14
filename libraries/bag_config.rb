@@ -154,7 +154,7 @@ module BagConfig
 end
 
 # Hook everything in
-unless Chef::Recipe.ancestors.include?(BagConfig)
+unless Chef::DSL::Recipe.ancestors.include?(BagConfig)
   Chef::DSL::Recipe.include BagConfig
   Chef::Resource.include BagConfig
   Chef::DSL::Recipe.include BagConfig
