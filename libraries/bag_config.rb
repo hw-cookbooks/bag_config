@@ -155,7 +155,6 @@ end
 
 # Hook everything in
 unless Chef::Recipe.ancestors.include?(BagConfig)
-  Chef::DSL::Recipe.include BagConfig
   Chef::Resource.include BagConfig
   Chef::DSL::Recipe.include BagConfig
   ::Erubis::Context.include BagConfig
